@@ -13,7 +13,7 @@ using std::string;
 
 namespace Microsoft { namespace MSR { namespace CNTK {
 
-Indexer::Indexer(FILE* file, bool skipSequenceIds, size_t chunkSize) :
+Indexer::Indexer(FILE* file, bool isPrimary, bool skipSequenceIds, size_t chunkSize) :
     m_file(file),
     m_fileOffsetStart(0),
     m_fileOffsetEnd(0),
@@ -23,7 +23,7 @@ Indexer::Indexer(FILE* file, bool skipSequenceIds, size_t chunkSize) :
     m_pos(nullptr),
     m_done(false),
     m_hasSequenceIds(!skipSequenceIds),
-    m_index(chunkSize)
+    m_index(chunkSize, isPrimary)
 {
     if (m_file == nullptr)
     {
@@ -160,11 +160,10 @@ void Indexer::Build(CorpusDescriptorPtr corpus)
 
 void Indexer::AddSequenceIfIncluded(CorpusDescriptorPtr corpus, size_t sequenceKey, SequenceDescriptor& sd)
 {
-    auto& stringRegistry = corpus->GetStringRegistry();
     auto key = std::to_string(sequenceKey);
     if (corpus->IsIncluded(key))
     {
-        sd.m_key.m_sequence = stringRegistry[key];
+        sd.m_key.m_sequence = sequenceKey;
         sd.m_key.m_sample = 0;
         m_index.AddSequence(sd);
     }
