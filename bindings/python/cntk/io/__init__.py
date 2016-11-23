@@ -307,7 +307,7 @@ class Deserializer(dict):
 class ImageDeserializer(Deserializer):
     '''
     This class configures the image reader that reads images and corresponding
-    labels from a file of the form
+    labels from a file of the form::
 
          <full path to image><tab><numerical label (0-based class id)>
 
@@ -452,10 +452,15 @@ class ImageDeserializer(Deserializer):
 #class TextFormatDeserializer(Deserializer): # TODO: either call it CNTKTextFormat or CTF. TextFormat is confusable with plain text
 class CTFDeserializer(Deserializer):
     '''
-    This class configures the text reader that reads text-encoded files from a file with lines of the form
-         [Sequence_Id](Sample)+ 
-        where
-         Sample=|Input_Name (Value )* 
+    This class configures the text reader that reads text-encoded files from a
+    file with lines of the form::
+
+        [Sequence_Id](Sample)+ 
+
+    where::
+
+        Sample=|Input_Name (Value )* 
+
     Args:
         filename (str): file name containing the text input
     See also:
@@ -478,8 +483,11 @@ class CTFDeserializer(Deserializer):
         '''
         Maps node (either node instance or node name) to a part of the text input, 
         either specified by the node name or the alias in the text file.
-        Example: for node name 'Apples' an input line could look like this:
-        |Apples 0 1 2 3 4 5 6 7 8 9
+
+        Example: for node name 'input0' an input line could look like this::
+
+          |input0 3 7 1 0 2
+
         Args:
             node (str or input node): node or its name
             dim (int): specifies the dimension of the input value vector 
