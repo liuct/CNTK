@@ -66,7 +66,7 @@ def test_output_to_retain():
 
     assert np.allclose(var_map[z_output], np.asarray(in1_value)+20)
 
-def test_eval_sparse_dense():
+def test_eval_sparse_dense(tmpdir, device_id):
     from cntk import Axis
     from cntk.io import MinibatchSource, CTFDeserializer, StreamDef, StreamDefs
     from cntk.device import cpu, gpu, set_default_device
@@ -75,11 +75,25 @@ def test_eval_sparse_dense():
 
     input_vocab_dim = label_vocab_dim = 69
 
-    ctf_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tiny.ctf")
+    ctf_data = '''\
+0	|S0 3:1 |# <s>	|S1 3:1 |# <s>
+0	|S0 4:1 |# A	|S1 32:1 |# ~AH
+0	|S0 5:1 |# B	|S1 36:1 |# ~B
+0	|S0 4:1 |# A	|S1 31:1 |# ~AE
+0	|S0 7:1 |# D	|S1 38:1 |# ~D
+0	|S0 12:1 |# I	|S1 47:1 |# ~IY
+0	|S0 1:1 |# </s>	|S1 1:1 |# </s>
+2	|S0 60:1 |# <s>	|S1 3:1 |# <s>
+2	|S0 61:1 |# A	|S1 32:1 |# ~AH
+'''
+    ctf_file = str(tmpdir/'2seqtest.txt')
+    with open(ctf_file, 'w') as f:
+        f.write(ctf_data)
+
     mbs = MinibatchSource(CTFDeserializer(ctf_file, StreamDefs(
         features  = StreamDef(field='S0', shape=input_vocab_dim,  is_sparse=True),
         labels    = StreamDef(field='S1', shape=label_vocab_dim,  is_sparse=True)
-    )), randomize=False, epoch_size = 1)
+    )), randomize=False, epoch_size = 2)
 
     batch_axis = Axis.default_batch_axis()
     input_seq_axis = Axis('inputAxis')
@@ -90,17 +104,26 @@ def test_eval_sparse_dense():
         shape=input_vocab_dim, dynamic_axes=input_dynamic_axes,
         name='raw_input', is_sparse=True)
 
-    mb_valid = mbs.next_minibatch(minibatch_size_in_samples=1, 
+    mb_valid = mbs.next_minibatch(minibatch_size_in_samples=100, 
             input_map={raw_input : mbs.streams.features})
 
     z = times(raw_input, np.eye(input_vocab_dim))
     e_reader = z.eval(mb_valid)
 
-    # This is the raw_input encoding in tiny.ctf
-    one_hot = [3, 4, 5, 4, 7, 12, 1]
-    data = csr_matrix(np.eye(input_vocab_dim, dtype=np.float32)[one_hot])
-    e_numpy = z.eval({raw_input: [data]}, device=cntk_device(device_id))
-    assert np.allclose(e_reader, e_numpy)
+    # CSR with the raw_input encoding in ctf_data
+    one_hot_data = [
+            [3, 4, 5, 4, 7, 12, 1], 
+            [60, 61]
+            ]
+    data = [csr_matrix(np.eye(input_vocab_dim, dtype=np.float32)[d]) for d in
+            one_hot_data]
+    e_csr = z.eval({raw_input: data}, device=cntk_device(device_id))
+    assert np.all(np.allclose(a, b) for a,b in zip(e_reader, e_csr))
+
+    # One-hot with the raw_input encoding in ctf_data
+    data = one_hot(one_hot_data, num_classes=input_vocab_dim)
+    e_hot = z.eval({raw_input: data}, device=cntk_device(device_id))
+    assert np.all(np.allclose(a, b) for a,b in zip(e_reader, e_hot))
 
 @pytest.mark.parametrize("batch_index_data", [
      [2,3], 
@@ -131,8 +154,6 @@ def test_eval_sparse_no_seq(batch_index_data, device_id):
     ]
     ])
 def test_eval_sparse_seq_1(batch, device_id):
-    if cntk_device(device_id)!=cpu(): # FIXME
-        pytest.skip("sparse is not yet supported on GPU")
     dim = 4
     multiplier = 2
     for var_is_sparse in [True, False]: 
@@ -152,11 +173,9 @@ def test_eval_sparse_seq_1(batch, device_id):
       [1],[2],[3]]),
     ])
 def test_eval_one_hot_seq(one_hot_batch, device_id):
-    if cntk_device(device_id)!=cpu(): # FIXME
-        pytest.skip("sparse is not yet supported on GPU")
     dim = 10
     multiplier = 2
-    for var_is_sparse in [True, False]: # FIXME
+    for var_is_sparse in [True, False]: 
         in1 = input_variable(shape=(dim,), is_sparse=var_is_sparse)
         # Convert CNTK node value to dense so that we can compare it later
         z = times(in1, np.eye(dim)*multiplier)
